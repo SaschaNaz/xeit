@@ -401,9 +401,9 @@
 				loadFile(event.dataTransfer.files[0]);
 			}
 			
-			function preprocessDOM(doc) {
+			function silenceDOM(doc) {
 				var script = doc.createElement('script');
-				//window.alert, window.open 함수 및 window.location.href setter를 작동하지 않게 하고 이를 사용할 경우 web messaging API를 통해 부모로 함수명 및 패러미터 로그를 보내도록 한다
+				//TODO: 막힌 window.alert, window.open를 사용할 경우 web messaging API를 통해 부모로 함수명 및 패러미터 로그를 보내도록 한다 - 디버그용
 				script.appendChild(doc.createTextNode('window.alert=window.open=function(str){};'));
 				doc.head.insertBefore(script, doc.head.firstChild);
 			}
@@ -422,7 +422,20 @@
 				doc.head.appendChild(script);
 			}
 			
-			//function runDOM(
+			function runDOM(domString, onDOMContentLoaded) {
+				var parsedDoc = (new DOMParser()).parseFromString(domString, "text/html");
+				silenceDOM(parsedDoc);
+				addContentListener(parsedDoc, function() {
+					onDOMContentLoaded(iframe.contentDocument, function() { document.body.removeChild(iframe); });
+				});
+				var iframe = document.createElement("iframe");
+				iframe.sandbox = "allow-same-origin allow-scripts";
+				iframe.style.display = "none";
+				document.body.appendChild(iframe);
+				iframe.contentDocument.open();
+				iframe.contentDocument.write(parsedDoc.documentElement.outerHTML);
+				iframe.contentDocument.close();
+			}
 			
 			function loadFile(file) {
 				if (file && file.type === 'text/html') {
@@ -431,25 +444,16 @@
 					showAuthDialog();
 					var reader = new FileReader();
 					reader.onload = function (e) {
-						var parsedDoc = (new DOMParser()).parseFromString(e.target.result, "text/html");
-						preprocessDOM(parsedDoc);
-						addContentListener(parsedDoc, function() {
+						runDOM(e.target.result, function(contentDocument, dispose) {
 							xeit.init(
-									iframe.contentDocument,
+									contentDocument,
 									function (r) {
-										document.body.removeChild(iframe);
+										dispose();
 										setupAuthDialog(r.sender);
 									},
 									displayError
 								);
 						});
-						var iframe = document.createElement("iframe");
-						iframe.sandbox = "allow-same-origin allow-scripts";
-						iframe.style.display = "none";
-						document.body.appendChild(iframe);
-						iframe.contentDocument.open();
-						iframe.contentDocument.write(parsedDoc.documentElement.outerHTML);
-						iframe.contentDocument.close();
 					};
 					reader.readAsText(file);
 				}
