@@ -360,9 +360,8 @@
                 showAuthDialog().on('shown', function () {
 					var messageListener = function (e) {
 						window.removeEventListener('message', messageListener);
-                        var html = e.data;
                         xeit.init(
-                            html,
+                            e.data,
                             function (r) {
                                 setupAuthDialog(r.sender);
                             },
@@ -411,14 +410,19 @@
 			
 			function addContentListener(doc, onload) {
 				var messageListener = function (e) {
-					window.removeEventListener("message", messageListener);
-					onload(e.data);
+					if (e.data === "mailloaded") {
+						window.removeEventListener("message", messageListener);
+						onload();
+					}
 				};
 				window.addEventListener("message", messageListener);
 				script = doc.createElement('script');
-				script.appendChild(doc.createTextNode('window.addEventListener("DOMContentLoaded",function(){window.parent.postMessage(document.documentElement.outerHTML,"*")});'));
+				script.id = "xeitPost";
+				script.appendChild(doc.createTextNode('window.addEventListener("DOMContentLoaded",function(){window.parent.postMessage("mailloaded","*");document.head.removeChild(xeitPost);});'));
 				doc.head.appendChild(script);
 			}
+			
+			//function runDOM(
 			
 			function loadFile(file) {
 				if (file && file.type === 'text/html') {
@@ -429,11 +433,11 @@
 					reader.onload = function (e) {
 						var parsedDoc = (new DOMParser()).parseFromString(e.target.result, "text/html");
 						preprocessDOM(parsedDoc);
-						addContentListener(parsedDoc, function(html) {
-							document.body.removeChild(iframe);
+						addContentListener(parsedDoc, function() {
 							xeit.init(
-									html,
+									iframe.contentDocument,
 									function (r) {
+										document.body.removeChild(iframe);
 										setupAuthDialog(r.sender);
 									},
 									displayError
