@@ -1,21 +1,23 @@
 var xeit = (function () {
     "use strict";
 
-    function parse($doc, html) {
-        if ($('#XEIViewer').length || (html.indexOf('PrintObjectTag') > -1 && html.indexOf('XEIViewer') > -1)) {
+    function parse(doc) {
+		var $doc = $(doc);
+		var html = doc.documentElement.outerHTML;
+        if (doc.getElementById('XEIViewer') || (html.indexOf('PrintObjectTag') > -1 && html.indexOf('XEIViewer') > -1)) {
             return {
                 func: 'init',
                 opts: { plugin: 'SoftForum' },
                 args: [
                     html,
-                    $('param[name="smime_header"]').val(),
-                    $('param[name="smime_body"]').val(),
-                    $('param[name="info_msg"]').val(),
-                    $('param[name="ui_option"]').val(),
-                    $('param[name="ui_desc"]').val()
+                    $doc.find('param[name="smime_header"]').val(),
+                    $doc.find('param[name="smime_body"]').val(),
+                    $doc.find('param[name="info_msg"]').val(),
+                    $doc.find('param[name="ui_option"]').val(),
+                    $doc.find('param[name="ui_desc"]').val()
                 ]
             };
-        } else if ($('#IniMasPluginObj').length || (html.indexOf('activeControl') > -1 && html.indexOf('IniMasPlugin') > -1)) {
+        } else if (doc.getElementById('IniMasPluginObj') || (html.indexOf('activeControl') > -1 && html.indexOf('IniMasPlugin') > -1)) {
             //HACK: IE에서만 동작하는 activeControl() (function.js) 이슈 회피.
             var body = html.replace(
                 /activeControl\(([\s]*['"])/,
@@ -29,46 +31,52 @@ var xeit = (function () {
                 /^[\s\S]*<body.*?>|<\/body>[\s\S]*$/ig,
                 ''
             );
-            $doc.empty().append($.parseHTML(body, true));
+            //$doc.empty().append($.parseHTML(body, true));			
+			while (doc.firstChild)
+			doc.removeChild(doc.firstChild);
+			doc.open();
+			doc.write(body);
+			doc.close();
+			//아 그런데 이러면 postMessage 또 받게 되네...; postMessage 받고 나서 해당 스크립트 노드 제거 필요. 노드에 xeitPost id 넣자
 
             return {
                 func: 'init',
                 opts: { plugin: 'IniTech' },
                 args: [
                     html,
-                    $('param[name="IniSMContents"]').val(),
-                    $('param[name="Question"]').val(),
-                    $('param[name="AttachedFile"]').val()
+                    $doc.find('param[name="IniSMContents"]').val(),
+                    $doc.find('param[name="Question"]').val(),
+                    $doc.find('param[name="AttachedFile"]').val()
                 ]
             };
-        } else if ($('#IniCrossMailObj').length) {
+        } else if (doc.getElementById('IniCrossMailObj')) {
             return {
                 func: 'init',
                 opts: { plugin: 'IniTech' },
                 args: [
                     html,
-                    $('param[name="IniSMContents"]').val(),
-                    $('param[name="Question"]').val(),
-                    $('param[name="AttachedFile"]').val(),
-                    $('param[name="OptData"]').val()
+                    $doc.find('param[name="IniSMContents"]').val(),
+                    $doc.find('param[name="Question"]').val(),
+                    $doc.find('param[name="AttachedFile"]').val(),
+                    $doc.find('param[name="OptData"]').val()
                 ]
             };
-        } else if ($('#JXCEAL').length) {
+        } else if (doc.getElementById('JXCEAL')) {
             return {
                 func: 'init',
                 opts: { plugin: 'Soft25' },
                 args: [
                     html,
-                    $('#JSEncContents').val()
+                    $doc.find('#JSEncContents').val()
                 ]
             };
-        } else if ($('#MailDec').length) {
+        } else if (doc.getElementById('MailDec')) {
             return {
                 func: 'init',
                 opts: { plugin: 'Natingtel' },
                 args: [
                     html,
-                    $('param[name="DocumentMail"]').val()
+                    $doc.find('param[name="DocumentMail"]').val()
                 ]
             };
         } else {
@@ -80,11 +88,10 @@ var xeit = (function () {
         }
     }
 
-    function check(html) {
+    function check(doc) {
         //HACK: <object> 태그의 상위 노드로써 DOM에 임시로 추가하여 query 수행.
-        var $doc = $('<div>', { id: 'Xeit-temp' }).hide().appendTo($('body')).append($.parseHTML(html));
-        var info = parse($doc, html);
-        $doc.remove();
+        //var $doc = $('<div>', { id: 'Xeit-temp' }).hide().appendTo($('body')).append($.parseHTML(html));
+        var info = parse(doc);
         return info;
     }
 
@@ -117,8 +124,8 @@ var xeit = (function () {
     }
 
     return {
-        init: function (html, success, failure) {
-            var info = check(html);
+        init: function (doc, success, failure) {
+            var info = check(doc);
             work(info.func, info.opts, info.args, success, failure);
         },
 

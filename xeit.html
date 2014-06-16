@@ -1,20 +1,13 @@
 <!DOCTYPE html>
 <html lang='ko'>
     <head>
-        <meta charset='UTF-8'>
+        <meta charset='utf-8'>
         <title>Xeit</title>
         <meta name='viewport' content='width=device-width, initial-scale=1.0'>
         <link href='http://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/css/bootstrap.no-responsive.no-icons.min.css' rel='stylesheet'>
         <link href='http://netdna.bootstrapcdn.com/font-awesome/3.2.1/css/font-awesome.min.css' rel='stylesheet'>
         <link href='css/xeit.css' rel='stylesheet'>
-		<style>
-		@-ms-viewport { width: device-width; }
-		@-webkit-viewport { width: device-width; }
-		@-moz-viewport { width: device-width; }
-		@-o-viewport { width: device-width; }
-		@viewport { width: device-width; }
-		</style>
-        <script src='http://ajax.googleapis.com/ajax/libs/jquery/2.0.1/jquery.min.js'></script>
+        <script src='http://code.jquery.com/jquery-2.1.1.min.js'></script>
         <script src='http://netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/js/bootstrap.min.js'></script>
         <script src='js/deps/srcdoc-polyfill/srcdoc-polyfill.min.js'></script>
         <script src='js/xeit.js'></script>
@@ -358,11 +351,10 @@
 
             function loadMail() {
                 showAuthDialog().on('shown', function () {
-					var messageListener = function (e) {
-						window.removeEventListener('message', messageListener);
-                        var html = e.data;
+                    var messageListener = function (e) {
+                        window.removeEventListener('message', messageListener);
                         xeit.init(
-                            html,
+                            e.data,
                             function (r) {
                                 setupAuthDialog(r.sender);
                             },
@@ -389,69 +381,78 @@
                 $('#xeit-nav a[href="#mail"]').hide();
                 $('#xeit-nav a[href="#help"]').tab('show');
             }
-			
-			function dragoverEffect(event) {
-				event.stopPropagation();
-				event.preventDefault();
-				event.dataTransfer.dropEffect = 'copy';
-			}
-			
-			function loadDroppedFile(event) {
-				event.stopPropagation();
-				event.preventDefault();
-				loadFile(event.dataTransfer.files[0]);
-			}
-			
-			function preprocessDOM(doc) {
-				var script = doc.createElement('script');
-				//window.alert, window.open 함수 및 window.location.href setter를 작동하지 않게 하고 이를 사용할 경우 web messaging API를 통해 부모로 함수명 및 패러미터 로그를 보내도록 한다
-				script.appendChild(doc.createTextNode('window.alert=window.open=function(str){};'));
-				doc.head.insertBefore(script, doc.head.firstChild);
-			}
-			
-			function addContentListener(doc, onload) {
-				var messageListener = function (e) {
-					window.removeEventListener("message", messageListener);
-					onload(e.data);
-				};
-				window.addEventListener("message", messageListener);
-				script = doc.createElement('script');
-				script.appendChild(doc.createTextNode('window.addEventListener("DOMContentLoaded",function(){window.parent.postMessage(document.documentElement.outerHTML,"*")});'));
-				doc.head.appendChild(script);
-			}
-			
-			function loadFile(file) {
-				if (file && file.type === 'text/html') {
-					$('#xeit-nav a[href="#mail"]').show();
-					$("<a href='#auth' data-toggle='tab' style='visibility: collapse'>").tab('show');
-					showAuthDialog();
-					var reader = new FileReader();
-					reader.onload = function (e) {
-						var parsedDoc = (new DOMParser()).parseFromString(e.target.result, "text/html");
-						preprocessDOM(parsedDoc);
-						addContentListener(parsedDoc, function(html) {
-							document.body.removeChild(iframe);
-							xeit.init(
-									html,
-									function (r) {
-										setupAuthDialog(r.sender);
-									},
-									displayError
-								);
-						});
-						var iframe = document.createElement("iframe");
-						iframe.sandbox = "allow-same-origin allow-scripts";
-						iframe.style.display = "none";
-						document.body.appendChild(iframe);
-						iframe.contentDocument.open();
-						iframe.contentDocument.write(parsedDoc.documentElement.outerHTML);
-						iframe.contentDocument.close();
-					};
-					reader.readAsText(file);
-				}
-				else
-					alert('올바른 HTML 보안 메일이 아닌 듯합니다. 메일 파일을 끌어온 것이 맞는지 다시 한 번 확인해 주시겠어요?');
-			}
+            
+            function dragoverEffect(event) {
+                event.stopPropagation();
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'copy';
+            }
+            
+            function loadDroppedFile(event) {
+                event.stopPropagation();
+                event.preventDefault();
+                loadFile(event.dataTransfer.files[0]);
+            }
+            
+            function silenceDOM(doc) {
+                var script = doc.createElement('script');
+                //TODO: 막힌 window.alert, window.open를 사용할 경우 web messaging API를 통해 부모로 함수명 및 패러미터 로그를 보내도록 한다 - 디버그용
+                script.appendChild(doc.createTextNode('window.alert=window.open=function(str){};'));
+                doc.head.insertBefore(script, doc.head.firstChild);
+            }
+            
+            function addContentListener(doc, onload) {
+                var messageListener = function (e) {
+                    if (e.data === "mailloaded") {
+                        window.removeEventListener("message", messageListener);
+                        onload();
+                    }
+                };
+                window.addEventListener("message", messageListener);
+                script = doc.createElement('script');
+                script.id = "xeitPost";
+                script.appendChild(doc.createTextNode('window.addEventListener("DOMContentLoaded",function(){window.parent.postMessage("mailloaded","*");document.head.removeChild(xeitPost);});'));
+                doc.head.appendChild(script);
+            }
+            
+            function runDOM(domString, onDOMContentLoaded) {
+                var parsedDoc = (new DOMParser()).parseFromString(domString, "text/html");
+                silenceDOM(parsedDoc);
+                addContentListener(parsedDoc, function() {
+                    onDOMContentLoaded(iframe.contentDocument, function() { document.body.removeChild(iframe); });
+                });
+                var iframe = document.createElement("iframe");
+                iframe.sandbox = "allow-same-origin allow-scripts";
+                iframe.style.display = "none";
+                document.body.appendChild(iframe);
+                iframe.contentDocument.open();
+                iframe.contentDocument.write(parsedDoc.documentElement.outerHTML);
+                iframe.contentDocument.close();
+            }
+            
+            function loadFile(file) {
+                if (file && file.type === 'text/html') {
+                    $('#xeit-nav a[href="#mail"]').show();
+                    $("<a href='#auth' data-toggle='tab' style='visibility: collapse'>").tab('show');
+                    showAuthDialog();
+                    var reader = new FileReader();
+                    reader.onload = function (e) {
+                        runDOM(e.target.result, function(contentDocument, dispose) {
+                            xeit.init(
+                                    contentDocument,
+                                    function (r) {
+                                        dispose();
+                                        setupAuthDialog(r.sender);
+                                    },
+                                    displayError
+                                );
+                        });
+                    };
+                    reader.readAsText(file);
+                }
+                else
+                    alert('올바른 HTML 보안 메일이 아닌 듯합니다. 메일 파일을 끌어온 것이 맞는지 다시 한 번 확인해 주시겠어요?');
+            }
 
             function isMailAttached() {
                 return (window.self !== window.top);
@@ -537,27 +538,27 @@
                                     <p>국내에서 사용하는 대다수의 보안메일은 윈도의 인터넷 익스플로러에 ActiveX 플러그인을 설치해야만 볼 수 있도록 되어 있습니다. 다른 OS나 브라우저를 사용하는 사람들은 볼 수 있는 방법이 없었지요.</p>
                                 </dd>
                                 <dt>어떻게 보는거죠?</dt>
-								<dd>
-									<p>브라우저에서 보안메일의 첨부파일을 열어보면 빈 화면 또는 플러그인 설치 안내 화면이 나오는 것을 많이 보셨을 거에요. 이 상태에서 브라우저에 등록해놓은 <strong>Xeit</strong> 북마클릿을 누르거나 이 페이지에서 메일 파일 자체를 불러오면 비밀번호 입력 화면이 등장하면서 별도로 플러그인을 설치하지 않고도 보안메일을 읽을 수 있게 됩니다.
-									</p>
-								</dd>
-								<dt>어떻게 사용하나요?</dt>
-								<dd>
-									<p>우선 이 페이지에서 메일 파일을 불러와 사용할 수 있습니다.</p>
-									<div class='well filedrop' ondragover="dragoverEffect(event)" ondrop="this.style.backgroundColor='';loadDroppedFile(event)" ondragenter="this.style.backgroundColor='#C0E2E2'" ondragleave="this.style.backgroundColor=''" onclick="fileloader.click()">
-										<p class='text-center'><input type="file" id="fileloader" accept="text/html" onchange="loadFile(event.target.files[0])" style="display: none"/></p>
-										<p class='text-center text-info'>메일 파일을 마우스로 끌어 이곳에 놓거나, 이곳을 눌러 파일을 불러 주세요.<br />파일은 외부로 전송되지 않으므로 안심하세요!</p>
-									</div>
-									<p>다른 방법도 있습니다. 일단 웹 브라우저 상단에 북마클릿을 넣을 수 있는 공간이 있는지 확인해보세요. 사파리에서는 책갈피 막대(Bookmarks Bar), 크롬에서는 북마크바(Bookmarks Bar), 파이어폭스에서는 북마크 도구모음(Bookmarks Toolbar)이라고 부르는 곳입니다. 맥이라면 <span class='label'>⌥</span> + <span class='label'>⌘</span> + <span class='label'>B</span>를 눌러서 확인해볼 수도 있습니다. 그 다음에는 아래의 버튼을 끌어 넣으면 됩니다.</p>
-									<div class='well'>
-										<p class='text-center'><a href="javascript:(function(){var%20b=document,c=b.getElementById(%22xeit%22);if(!c){window.addEventListener(%22message%22,function(a){%22ready%22==a.data%3Fc.contentWindow.postMessage(d,%22*%22):%22fallback%22==a.data%26%26(b.body=e)});var%20a=b.documentElement,d=a.outerHTML;a.style.height=%22100%25%22;var%20e=b.body,a=b.body=b.createElement(%22body%22);a.style.cssText=%22margin:0;padding:0;height:100%25%22;c=b.createElement(%22iframe%22);c.id=%22xeit%22;c.src=%22http://tomyun.github.io/xeit/xeit.html%22;c.style.cssText=%22width:100%25;height:100%25;border:0%22;a.appendChild(c)}})();"><button class='btn btn-info' type='button'><i class='icon-bookmark icon-white'></i> Xeit</button></a></p>
-										<p class='text-center text-info'>이 버튼을 브라우저 상단의 책갈피에 끌어 넣으세요!</p>
-									</div>
-								</dd>
+                                <dd>
+                                    <p>브라우저에서 보안메일의 첨부파일을 열어보면 빈 화면 또는 플러그인 설치 안내 화면이 나오는 것을 많이 보셨을 거에요. 이 상태에서 브라우저에 등록해놓은 <strong>Xeit</strong> 북마클릿을 누르거나 이 페이지에서 메일 파일 자체를 불러오면 비밀번호 입력 화면이 등장하면서 별도로 플러그인을 설치하지 않고도 보안메일을 읽을 수 있게 됩니다.
+                                    </p>
+                                </dd>
+                                <dt>어떻게 사용하나요?</dt>
+                                <dd>
+                                    <p>우선 이 페이지에서 메일 파일을 불러와 사용할 수 있습니다.</p>
+                                    <div class='well filedrop' ondragover="dragoverEffect(event)" ondrop="this.style.backgroundColor='';loadDroppedFile(event)" ondragenter="this.style.backgroundColor='#C0E2E2'" ondragleave="this.style.backgroundColor=''" onclick="fileloader.click()">
+                                        <p class='text-center'><input type="file" id="fileloader" accept="text/html" onchange="loadFile(event.target.files[0])" style="display: none"/></p>
+                                        <p class='text-center text-info'>메일 파일을 마우스로 끌어 이곳에 놓거나, 이곳을 눌러 파일을 불러 주세요.<br />파일은 외부로 전송되지 않으므로 안심하세요!</p>
+                                    </div>
+                                    <p>다른 방법도 있습니다. 일단 웹 브라우저 상단에 북마클릿을 넣을 수 있는 공간이 있는지 확인해보세요. 사파리에서는 책갈피 막대(Bookmarks Bar), 크롬에서는 북마크바(Bookmarks Bar), 파이어폭스에서는 북마크 도구모음(Bookmarks Toolbar)이라고 부르는 곳입니다. 맥이라면 <span class='label'>⌥</span> + <span class='label'>⌘</span> + <span class='label'>B</span>를 눌러서 확인해볼 수도 있습니다. 그 다음에는 아래의 버튼을 끌어 넣으면 됩니다.</p>
+                                    <div class='well'>
+                                        <p class='text-center'><a href="javascript:(function(){var%20b=document,c=b.getElementById(%22xeit%22);if(!c){window.addEventListener(%22message%22,function(a){%22ready%22==a.data%3Fc.contentWindow.postMessage(d,%22*%22):%22fallback%22==a.data%26%26(b.body=e)});var%20a=b.documentElement,d=a.outerHTML;a.style.height=%22100%25%22;var%20e=b.body,a=b.body=b.createElement(%22body%22);a.style.cssText=%22margin:0;padding:0;height:100%25%22;c=b.createElement(%22iframe%22);c.id=%22xeit%22;c.src=%22http://tomyun.github.io/xeit/xeit.html%22;c.style.cssText=%22width:100%25;height:100%25;border:0%22;a.appendChild(c)}})();"><button class='btn btn-info' type='button'><i class='icon-bookmark icon-white'></i> Xeit</button></a></p>
+                                        <p class='text-center text-info'>이 버튼을 브라우저 상단의 책갈피에 끌어 넣으세요!</p>
+                                    </div>
+                                </dd>
                                 <dt>어디서 쓸 수 있죠?</dt>
                                 <dd>
                                     <p>맥에서 사파리(6)를 기준으로 만들었으며 크롬(26)과 파이어폭스(20)에서도 돌아가는 것을 확인하였습니다. 인터넷 익스플로러에서는 확인해보지 못 했네요.</p>
-                                    <p>참고로 크롬에서는 직접 북마클릿을 설치하거나 눌러줄 필요 없이 <a herf="http://j.mp/xeitce" target="_blank">확장 프로그램</a>으로 보다 쉽고 편리하게 이용할 수 있습니다.</p>
+                                    <p>참고로 크롬에서는 직접 북마클릿을 설치하거나 눌러줄 필요 없이 <a href="http://j.mp/xeitce" target="_blank">확장 프로그램</a>으로 보다 쉽고 편리하게 이용할 수 있습니다.</p>
                                 </dd>
                                 <dt>믿을 수 있나요?</dt>
                                 <dd>
@@ -628,6 +629,14 @@
                                                 <td></td>
                                             </tr>
                                             <tr>
+                                                <td>LIG손해보험</td>
+                                                <td>XecureExpress</td>
+                                                <td>PKCS#7</td>
+                                                <td>DES, SHA1</td>
+                                                <td><i class='icon-ok'></i></td>
+                                                <td></td>
+                                            </tr>
+                                            <tr>
                                                 <td>MG손해보험</td>
                                                 <td>INISAFE Mail</td>
                                                 <td>?</td>
@@ -658,6 +667,14 @@
                                                 <td>?</td>
                                                 <td><i class='icon-time'></i></td>
                                                 <td>확인필요</td>
+                                            </tr>
+                                            <tr>
+                                                <td>국민연금공단</td>
+                                                <td>XecureExpress</td>
+                                                <td>PKCS#7</td>
+                                                <td>DES, SHA1</td>
+                                                <td><i class='icon-ok'></i></td>
+                                                <td></td>
                                             </tr>
                                             <tr>
                                                 <td>국세청</td>
@@ -724,12 +741,20 @@
                                                 <td>DRM 플러그인 필요</td>
                                             </tr>
                                             <tr>
+                                                <td>산업은행</td>
+                                                <td>INISAFE Mail</td>
+                                                <td>INITECH</td>
+                                                <td>SEED, SHA1, MD5</td>
+                                                <td><i class='icon-ok'></i></td>
+                                                <td></td>
+                                            </tr>
+                                            <tr>
                                                 <td>삼성생명</td>
                                                 <td>XecureExpress</td>
                                                 <td>PKCS#7</td>
                                                 <td>DES, SHA1</td>
-                                                <td><i class='icon-ok'></i></td>
-                                                <td></td>
+                                                <td><i class='icon-ok'></i><i class='icon-exclamation'></i></td>
+                                                <td>DRM 플러그인 필요?</td>
                                             </tr>
                                             <tr>
                                                 <td>삼성카드</td>
@@ -768,8 +793,8 @@
                                                 <td>XecureExpress</td>
                                                 <td>PKCS#7 / PWD</td>
                                                 <td>SEED, HMAC-SHA1 / DES, SHA1</td>
-                                                <td><i class='icon-ok'></i></td>
-                                                <td></td>
+                                                <td><i class='icon-time'></i></td>
+                                                <td>일부 오류발생</td>
                                             </tr>
                                             <tr>
                                                 <td>우리은행</td>
@@ -861,7 +886,7 @@
                 <footer id='footer'>
                     <div class='container'>
                         <p class='text-center muted credit'>
-                            &copy; 2013 Team BASA
+                            &copy; 2014 Team BASA
                         </p>
                     </div>
                 </footer>

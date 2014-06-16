@@ -51,11 +51,15 @@ extend(SoftForum.prototype, {
                 company = 'Xeit.uplus';
             } else if (this.info_msg.indexOf('KEB') > -1) {
                 company = 'Xeit.yescard';
+            } else if (this.info_msg.indexOf('LIG') > -1) {
+                company = 'Xeit.lig';
             } else if (this.info_msg.indexOf('miraeassetlife.com') > -1) {
                 company = 'Xeit.miraeassetlife';
             } else {
                 company = '보안메일';
             }
+        } else if (company === 'ｱｹｹﾎｿｬｱﾝ ｺｸｾﾈｸﾞﾀﾏ') {
+            company = '국민연금 보안메일';
         } else if (company === '悼剧积疙 焊救皋老') {
             company = '동양생명 보안메일';
         } else if (company === '') {
@@ -148,6 +152,21 @@ extend(SoftForum.prototype, {
             }]
         },
 
+        'Xeit.lig': {
+            name: 'LIG손해보험',
+            support: true,
+            rule: [{
+                hint: '주민등록번호 뒤',
+                size: 7
+            }, {
+                hint: '사업자등록번호',
+                size: 10
+            }, {
+                hint: '보유자코드',
+                size: 8
+            }]
+        },
+
         'Xeit.lottepoint': {
             name: '롯데포인트카드',
             support: true,
@@ -196,6 +215,15 @@ extend(SoftForum.prototype, {
             }]
         },
 
+        '국민연금 보안메일': {
+            name: '국민연금',
+            support: true,
+            rule: [{
+                hint: ['주민등록번호 뒤', '사업자등록번호 뒤'],
+                size: 7
+            }]
+        },
+
         '동양생명 보안메일': {
             name: '동양생명',
             support: true,
@@ -211,6 +239,9 @@ extend(SoftForum.prototype, {
             rule: [{
                 hint: '주민등록번호 뒤',
                 size: 7
+            }, {
+                hint: '사업자등록번호',
+                size: 10
             }]
         },
 
